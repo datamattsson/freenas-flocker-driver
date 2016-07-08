@@ -55,6 +55,7 @@ The vagrant sandbox provisions a number of resources on the FreeNAS box that mig
 - The driver expects that there is a Portal and Target with id 1 and that the Target is associated with the default Portal. This is not a concern when you only have one Target and one Portal.
 - In `/etc/flocker` on the compute nodes there is a file, `agent.yml`, that configures the FreeNAS API and which Volume (zpool) you want to use for your flocker volumes.
 - The flocker compute nodes relies on `multipath-tools`, even if you only have one path to your storage, for naming consistency of devices across configurations. The multipath.conf shipped in this directory is an essential starting point.
+- The official flocker driver package is installable with `pip`, it is not at this time published. Please install manually at this time: https://github.com/drajen/freenas-flocker-driver/raw/master/release
 
 # Known issues and limitations
 - If you run into any issues at all, your starting point is to look in `/var/log/flocker/flocker-dataset-agent.log` on the control node (node1 in the sandbox).
