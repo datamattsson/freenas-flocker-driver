@@ -1,0 +1,182 @@
+---
+
+- hosts: all
+  become: yes
+  vars:
+    nodes:
+    - node1
+    - node2
+
+  tasks:
+  - name: Allow HTTPS apt transport
+    apt: name=apt-transport-https state=present update_cache=yes
+  
+  - name: software-properties-common
+    apt: name=software-properties-common state=present 
+  
+  - name: Install ca-certs
+    apt: name=ca-certificates state=present
+  
+  - name: Add key server
+    apt_key: keyserver=hkp://p80.pool.sks-keyservers.net:80 id=58118E89F3A912897C070ADBF76221572C52609D
+  
+  - name: Add Docker repo
+    apt_repository: repo="deb https://apt.dockerproject.org/repo ubuntu-trusty main" state=present
+  
+  - name: Add Flocker repo
+    apt_repository: repo="deb https://clusterhq-archive.s3.amazonaws.com/ubuntu/{{ ansible_lsb.release }}/$(ARCH) /" state=present
+  
+  - name: Install Docker Engine 
+    apt: name=docker-engine state=present
+  
+  - name: Enable Docker Engine
+    service: name=docker state=started
+  
+  - name: Install pip
+    apt: name=python-pip state=present
+  
+  - name: Ensure vagrant is in docker group
+    user: name=vagrant groups=docker append=yes
+  
+  - name: Add ClusterHQ apt configs
+    blockinfile:
+      dest: /etc/apt/preferences.d/buildbot-700
+      create: yes
+      marker: "// {mark} ANSIBLE MANAGED BLOCK"
+      block: |
+        Package: *
+        Pin: origin clusterhq-archive.s3.amazonaws.com
+        Pin-Priority: 700
+  
+  - name: Install Flocker CLI
+    apt: name=clusterhq-flocker-cli state=present update_cache=yes force=yes
+  
+  - name: Install Flocker Node
+    apt: name=clusterhq-flocker-node state=present force=yes
+  
+  - name: Install Flocker Docker Plugin
+    apt: name=clusterhq-flocker-docker-plugin state=present force=yes
+  
+  - name: Add mappings to /etc/hosts
+    blockinfile:
+      dest: /etc/hosts
+      block: |
+        {{item.ip}} {{item.name}}
+      marker: "# {mark} ANSIBLE MANAGED BLOCK {{item.name}}"
+    with_items:
+      - { name: node1, ip: 192.168.65.10 }
+      - { name: node2, ip: 192.168.65.11 }
+      - { name: nas1, ip: 192.168.65.21 }
+      - { name: hostos, ip: 192.168.65.1 }
+
+  - name: Create local ca
+    file: path=/vagrant/ca mode=0700 state=directory
+    when: ansible_nodename == "node1" 
+
+  - name: "Create local {{ item }} cert dir"
+    file: "path=/vagrant/ca/{{ item }} mode=0700 state=directory"
+    with_items: "{{ nodes }}"
+    when: ansible_nodename == "node1" 
+
+  - name: Generate CA
+    command: flocker-ca initialize flockers
+    args:
+      chdir: /vagrant/ca
+    when: ansible_nodename == "node1" 
+  
+  - name: Generate plug-in cert
+    command: flocker-ca create-api-certificate plugin
+    args:
+      chdir: /vagrant/ca
+    when: ansible_nodename == "node1" 
+
+  - name: Node1 is control node
+    command: flocker-ca create-control-certificate node1
+    args:
+      chdir: /vagrant/ca
+    when: ansible_nodename == "node1" 
+
+  - name: "Create {{ item }} cert"
+    command: "flocker-ca create-node-certificate -o {{ item }}"
+    args:
+      chdir: /vagrant/ca
+    with_items: "{{ nodes }}"
+    when: ansible_nodename == "node1" 
+
+  - name: Create /etc/flocker to keep certs
+    file: path=/etc/flocker owner=root group=root mode=0700 state=directory
+
+  - name: Copy node certs (.crt)
+    shell: "cp /vagrant/ca/{{ ansible_nodename }}/*.crt /etc/flocker/node.crt"
+  
+  - name: Copy node certs (.key)
+    shell: "cp /vagrant/ca/{{ ansible_nodename }}/*.key /etc/flocker/node.key"
+
+  - name: Copy cluster cert
+    copy: src=ca/cluster.crt dest=/etc/flocker/cluster.crt owner=root group=root mode=0644
+
+  - name: Make node1 control node (.crt)
+    copy: src=ca/control-node1.crt dest=/etc/flocker/control-service.crt owner=root group=root mode=0644
+    when: ansible_nodename == "node1" 
+  
+  - name: Make node1 control node (.key)
+    copy: src=ca/control-node1.key dest=/etc/flocker/control-service.key owner=root group=root mode=0600
+    when: ansible_nodename == "node1" 
+
+  - name: Install flockerctl
+    shell: "curl -sSL https://get.flocker.io |sh"
+    when: ansible_nodename == "node1" 
+
+  - name: Copy docker plug-in API (.crt)
+    copy: src=ca/plugin.crt dest=/etc/flocker/plugin.crt owner=root group=root mode=0644
+  
+  - name: Copy docker plug-in API (.key)
+    copy: src=ca/plugin.key dest=/etc/flocker/plugin.key owner=root group=root mode=0600
+  
+  - name: Reuse docker plug-in API for flockerctl (.crt)
+    copy: src=ca/plugin.crt dest=/etc/flocker/user.crt owner=root group=root mode=0644
+    when: ansible_nodename == "node1" 
+  
+  - name: Reuse docker plug-in API for flockerctl (.key)
+    copy: src=ca/plugin.key dest=/etc/flocker/user.key owner=root group=root mode=0600
+    when: ansible_nodename == "node1" 
+
+  - name: Startup/enable flocker-control
+    service: name=flocker-control enabled=yes state=started
+  
+  - name: Add agent.yml
+    copy: src=agent.yml dest=/etc/flocker/agent.yml owner=root group=root mode=0600
+
+  - name: Install freenas-flocker-driver
+    shell: "/opt/flocker/bin/pip install /vagrant/freenas-flocker-driver-*"
+  
+  - name: Startup/enable flocker-dataset-agent
+    service: name=flocker-dataset-agent enabled=yes state=started
+  
+  - name: Startup/enable flocker-container-agent
+    service: name=flocker-container-agent enabled=yes state=started
+  
+  - name: Startup/enable flocker-docker-plugin
+    service: name=flocker-dataset-agent enabled=yes state=restarted
+
+  - name: Enable Flocker Docker plugin
+    service: name=flocker-docker-plugin enabled=yes state=restarted
+
+  - name: Install iscsi
+    apt: name=open-iscsi state=present 
+
+  - name: Copy multipath.conf
+    copy: src=multipath.conf dest=/etc/multipath.conf owner=root group=root mode=0644
+  
+  - name: Install multipath-tools
+    apt: name=multipath-tools state=present 
+  
+  - name: Discover iSCSI target
+    command: iscsiadm -m discovery -t st -p nas1:3260
+  
+  - name: Login to iSCSI target
+    command: iscsiadm -m node -L all
+
+  - name: Cleanup temp CA location
+    file: path=/vagrant/ca state=absent
+    when: ansible_nodename == "node2" 

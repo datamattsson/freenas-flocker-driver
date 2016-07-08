@@ -1,0 +1,10 @@
+"version": 1
+"control-service":
+  "hostname": "node1"
+  "port": 4524
+
+dataset:
+  backend: "freenas_flocker_driver"
+  proto: "iscsi"
+  url: "http://root:vagrant@192.168.65.21/api"
+  volume: "tank"

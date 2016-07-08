@@ -1,0 +1,32 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  config.vm.define "nas1" do |nas1|
+    nas1.vm.box = "drajen/freenas9"
+    nas1.vm.hostname = "nas1"
+    nas1.vm.network "private_network", ip: "192.168.65.21", auto_config: false
+    nas1.vm.provision "ansible" do |ansible|
+      ansible.host_vars = {
+      	"nas1" => { "ansible_python_interpreter" => "/usr/local/bin/python" }
+	}
+      ansible.playbook = "storage.yml"
+    end
+  end
+  config.vm.define "node1" do |node1|
+    node1.vm.box = "ubuntu/trusty64"
+    node1.vm.hostname = "node1"
+    node1.vm.network "private_network", ip: "192.168.65.10"
+    node1.vm.provision "ansible" do |ansible|
+      ansible.playbook = "compute.yml"
+    end
+  end
+  config.vm.define "node2" do |node2|
+    node2.vm.box = "ubuntu/trusty64"
+    node2.vm.hostname = "node2"
+    node2.vm.network "private_network", ip: "192.168.65.11"
+    node2.vm.provision "ansible" do |ansible|
+      ansible.playbook = "compute.yml"
+    end
+  end
+end

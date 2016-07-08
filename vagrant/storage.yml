@@ -1,0 +1,71 @@
+---
+
+- hosts: all
+
+  tasks:
+  - name: Configure em1
+    uri:
+      url: http://localhost:80/api/v1.0/network/interface/
+      user: "root"
+      password: "vagrant"
+      method: POST
+      force_basic_auth: yes
+      status_code: 201
+      body_format: json
+      body:
+          int_ipv4address: "192.168.65.21"
+          int_v4netmaskbit: "24"
+          int_interface: "em1"
+          int_name: "flocker1"
+
+  - name: Create default target
+    uri:
+      url: http://localhost:80/api/v1.0/services/iscsi/target/ 
+      user: "root"
+      password: "vagrant"
+      method: POST
+      force_basic_auth: yes
+      status_code: 201
+      body_format: json
+      body:
+          iscsi_target_alias: "target1"
+          iscsi_target_name: "target1"
+
+  - name: Create default portal
+    uri:
+      url: http://localhost:80/api/v1.0/services/iscsi/portal/ 
+      user: "root"
+      password: "vagrant"
+      method: POST
+      force_basic_auth: yes
+      status_code: 201
+      body_format: json
+      body:
+          iscsi_target_portal_comment: "portal1"
+          iscsi_target_portal_ips:
+            - "0.0.0.0:3260"
+
+  - name: Create default targetgroup
+    uri:
+      url: http://localhost:80/api/v1.0/services/iscsi/targetgroup/ 
+      user: "root"
+      password: "vagrant"
+      method: POST
+      force_basic_auth: yes
+      status_code: 201
+      body_format: json
+      body:
+          iscsi_target: 1
+          iscsi_target_portalgroup: 1
+
+  - name: Enable iSCSI
+    uri:
+      url: http://localhost:80/api/v1.0/services/services/iscsitarget/
+      user: "root"
+      password: "vagrant"
+      method: PUT
+      force_basic_auth: yes
+      status_code: 200
+      body_format: json
+      body:
+          srv_enable: true
