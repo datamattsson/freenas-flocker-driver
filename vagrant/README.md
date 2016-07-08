@@ -65,4 +65,4 @@ The vagrant sandbox provisions a number of resources on the FreeNAS box that mig
 - Flocker have the capability of providing different classes of service for each provisioned volume. None of this is implemented yet.
 
 # License 
-Please see https://github.com/drajen/freenas-flocker-driver/LICENSE
+Please see https://github.com/drajen/freenas-flocker-driver/blob/master/LICENSE
